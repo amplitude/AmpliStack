@@ -7,21 +7,17 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <header class="app-header">
-        <div class="logo">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="32" height="32" rx="8" fill="#1E61DC"/>
-                <path d="M16 6L26 26H6L16 6Z" fill="white"/>
-            </svg>
-            <span class="logo-text">AmpliStack</span>
-        </div>
-        <nav class="header-actions">
-            <button class="btn btn-secondary" id="export-btn">Export</button>
-        </nav>
-    </header>
-
     <div class="app-body">
         <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="32" height="32" rx="8" fill="#1E61DC"/>
+                        <path d="M16 6L26 26H6L16 6Z" fill="white"/>
+                    </svg>
+                    <span class="logo-text">AmpliStack</span>
+                </div>
+            </div>
             <div class="category-picker">
                 <button class="category-tab active" data-category="marketing" title="Marketing Channels">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -76,6 +72,12 @@
         </aside>
 
         <main class="canvas-container">
+            <button class="export-btn-floating" id="export-btn" aria-label="Export diagram" title="Export diagram">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"></circle>
+                    <path d="M8 12h8M12 16l4-4-4-4"></path>
+                </svg>
+            </button>
             <div class="canvas">
                 <div class="layer layer-marketing" data-layer="marketing">
                     <div class="layer-label">Marketing Channels</div>

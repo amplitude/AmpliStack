@@ -464,13 +464,14 @@ function loadHtml2Canvas() {
 async function initExportButton() {
     const exportBtn = document.getElementById('export-btn');
     if (!exportBtn) return;
+    const idleAriaLabel = exportBtn.getAttribute('aria-label') || 'Export diagram';
     exportBtn.addEventListener('click', async () => {
         try {
             const canvasElement = document.querySelector('.canvas');
             if (!canvasElement) return;
             await loadHtml2Canvas();
             exportBtn.disabled = true;
-            exportBtn.textContent = 'Exporting...';
+            exportBtn.setAttribute('aria-label', 'Exporting diagram');
             const options = {
                 backgroundColor: '#FFFFFF',
                 scale: window.devicePixelRatio || 2,
@@ -499,7 +500,7 @@ async function initExportButton() {
             console.error('Export failed', error);
         } finally {
             exportBtn.disabled = false;
-            exportBtn.textContent = 'Export';
+            exportBtn.setAttribute('aria-label', idleAriaLabel);
         }
     });
 }
