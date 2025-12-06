@@ -39,7 +39,9 @@ const categories = {
         items: [
             { id: 'web-app', name: 'Web App', icon: 'web' },
             { id: 'mobile-app', name: 'Mobile App', icon: 'mobile' },
-            { id: 'website', name: 'Website', icon: 'globe' }
+            { id: 'website', name: 'Website', icon: 'globe' },
+
+            { id: 'ott', name: 'OTT', icon: 'ott' },
         ]
     },
     sources: {
