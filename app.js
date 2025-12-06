@@ -25,15 +25,13 @@ const categories = {
         name: 'Marketing Channels',
         layer: 'marketing',
         items: [
+            { id: 'paid-ads', name: 'Paid Ads', icon: 'paid-ads' },
             { id: 'email', name: 'Email', icon: 'email' },
             { id: 'sms', name: 'SMS', icon: 'sms' },
-            { id: 'paid-ads', name: 'Paid Ads', icon: 'paid-ads' },
             { id: 'push-notifications', name: 'Push', icon: 'push' },
             { id: 'social-media', name: 'Social Media', icon: 'social' },
             { id: 'search', name: 'Organic', icon: 'search' },
-            { id: 'referral', name: 'Referral', icon: 'referral' },
-            { id: 'in-app', name: 'In-App', icon: 'in-app' }
-        ]
+            { id: 'referral', name: 'Referral', icon: 'referral' }        ]
     },
     experiences: {
         name: 'Owned Experiences',
@@ -50,6 +48,7 @@ const categories = {
         items: [
             { id: 'amplitude-sdk', name: 'Amplitude SDK', icon: 'amplitude-mark' },
             { id: 'segment', name: 'Segment', icon: 'segment-mark' },
+            { id: 'tealium', name: 'Tealium', icon: 'tealium' },
             { id: 'api', name: 'HTTP API', icon: 'api' },
             { id: 'cdp', name: 'CDP', icon: 'cdp' },
             { id: 'etl', name: 'ETL', icon: 'etl' },
@@ -95,6 +94,8 @@ const leftMostPriorityMap = {
 };
 
 const SLOT_COLUMNS = 6;
+const DROP_ZONE_HORIZONTAL_PADDING = 48;
+const DROP_ZONE_VERTICAL_PADDING = 64;
 const layerOrder = {
     marketing: [],
     experiences: [],
@@ -290,7 +291,7 @@ const amplitudeSdkBadgeOptions = [
 const amplitudeSdkSelectedBadges = new Set();
 
 // Connection model definitions
-const cdpLikeSourceIds = ['cdp', 'segment'];
+const cdpLikeSourceIds = ['cdp', 'segment', 'tealium'];
 const primaryWarehouseNodeIds = ['bigquery', 'databricks', 'snowflake'];
 const warehouseNodeIds = [...primaryWarehouseNodeIds, 's3'];
 
@@ -346,11 +347,11 @@ const CONNECTION_COLOR = 'rgba(100, 116, 139, 0.75)';
 const modelAutoConfig = {
     'amplitude-to-warehouse': {
         add: ['amplitude-analytics', 'snowflake', 'amplitude-sdk', 'mobile-app', 'web-app'],
-        remove: ['cdp', 'segment', 'etl']
+        remove: ['cdp', 'segment', 'tealium', 'etl']
     },
     'warehouse-to-amplitude': {
         add: ['amplitude-analytics', 'snowflake', 'mobile-app', 'etl', 'web-app'],
-        remove: ['cdp', 'segment', 'amplitude-sdk']
+        remove: ['cdp', 'segment', 'tealium', 'amplitude-sdk']
     },
     'cdp-in-the-middle': {
         add: ['cdp', 'mobile-app', 'web-app', 'amplitude-analytics'],
@@ -491,10 +492,10 @@ function initModelPicker() {
 }
 
 function initLayerDragTargets() {
-    document.querySelectorAll('.layer-content').forEach(content => {
-        content.addEventListener('dragover', handleLayerDragOver);
-        content.addEventListener('dragleave', handleLayerDragLeave);
-        content.addEventListener('drop', handleLayerDrop);
+    document.querySelectorAll('.layer').forEach(layer => {
+        layer.addEventListener('dragover', handleLayerDragOver);
+        layer.addEventListener('dragleave', handleLayerDragLeave);
+        layer.addEventListener('drop', handleLayerDrop);
     });
 }
 
@@ -955,6 +956,25 @@ function setNodeSlotPosition(node, slotIndex) {
     node.style.gridRow = `${row} / span 1`;
 }
 
+function getLayerElementFromTarget(target) {
+    if (!target) return null;
+    if (target.classList?.contains('layer')) return target;
+    if (target.classList?.contains('layer-content')) {
+        return target.closest('.layer');
+    }
+    return target.closest?.('.layer') || null;
+}
+
+function getLayerContentFromTarget(target) {
+    if (!target) return null;
+    if (target.classList?.contains('layer-content')) return target;
+    if (target.classList?.contains('layer')) {
+        return target.querySelector('.layer-content');
+    }
+    const layer = target.closest?.('.layer');
+    return layer?.querySelector('.layer-content') || null;
+}
+
 function handleDragStart(e) {
     draggedNode = e.currentTarget;
     if (!draggedNode) return;
@@ -973,7 +993,9 @@ function handleDragEnd() {
 
 function handleLayerDragOver(e) {
     if (!draggedNode) return;
-    const content = e.currentTarget;
+    const layer = getLayerElementFromTarget(e.currentTarget);
+    const content = getLayerContentFromTarget(layer || e.currentTarget);
+    if (!content) return;
     const targetCategory = getLayerCategoryFromContent(content);
     if (targetCategory !== draggedNode.dataset.category) return;
     e.preventDefault();
@@ -985,19 +1007,23 @@ function handleLayerDragOver(e) {
 
 function handleLayerDragLeave(e) {
     if (!draggedNode) return;
-    const content = e.currentTarget;
-    if (!content.contains(e.relatedTarget)) {
+    const layer = getLayerElementFromTarget(e.currentTarget);
+    if (layer?.contains(e.relatedTarget)) return;
+    const content = getLayerContentFromTarget(layer || e.currentTarget);
+    if (content) {
         content.classList.remove('drag-over');
     }
 }
 
 function handleLayerDrop(e) {
     if (!draggedNode) return;
-    const content = e.currentTarget;
+    const layer = getLayerElementFromTarget(e.currentTarget);
+    const content = getLayerContentFromTarget(layer || e.currentTarget);
+    if (!content) return;
     const targetCategory = getLayerCategoryFromContent(content);
     if (targetCategory !== draggedNode.dataset.category) return;
     e.preventDefault();
-    const slotIndex = getSlotIndex(content, e.clientX);
+    const slotIndex = getSlotIndex(content, e.clientX, e.clientY);
     updateLayerOrderForNode(targetCategory, draggedNode.dataset.id, slotIndex);
     setNodeSlotPosition(draggedNode, slotIndex);
     content.classList.remove('drag-over');
@@ -1016,14 +1042,40 @@ function updateLayerOrderFromDom(content, category) {
     layerOrder[category] = nodes.map(node => node.dataset.id);
 }
 
-function getSlotIndex(content, clientX) {
+function getSlotIndex(content, clientX, clientY) {
+    if (!content) return 0;
     const rect = content.getBoundingClientRect();
-    const relativeX = Math.min(Math.max(clientX - rect.left, 0), rect.width - 1);
-    const slotWidth = rect.width / SLOT_COLUMNS || 1;
+    const safeWidth = Math.max(rect.width, 1);
+    const safeHeight = Math.max(rect.height, 1);
+
+    const clampedX = Math.min(
+        Math.max(clientX, rect.left - DROP_ZONE_HORIZONTAL_PADDING),
+        rect.right + DROP_ZONE_HORIZONTAL_PADDING
+    );
+    const clampedY = Math.min(
+        Math.max(clientY, rect.top - DROP_ZONE_VERTICAL_PADDING),
+        rect.bottom + DROP_ZONE_VERTICAL_PADDING
+    );
+
+    const relativeX = Math.min(Math.max(clampedX - rect.left, 0), safeWidth - 1);
+    const relativeY = Math.min(Math.max(clampedY - rect.top, 0), safeHeight - 1);
+
+    const slotWidth = safeWidth / SLOT_COLUMNS;
     const column = Math.min(SLOT_COLUMNS - 1, Math.max(0, Math.floor(relativeX / slotWidth)));
-    const currentSlot = Number(draggedNode?.dataset?.slotIndex) || 0;
-    const currentRow = Math.floor(currentSlot / SLOT_COLUMNS);
-    return currentRow * SLOT_COLUMNS + column;
+
+    const nodes = content.querySelectorAll('.diagram-node');
+    let maxSlotIndex = -1;
+    nodes.forEach(node => {
+        const slot = Number(node.dataset?.slotIndex);
+        if (!Number.isNaN(slot)) {
+            maxSlotIndex = Math.max(maxSlotIndex, slot);
+        }
+    });
+    const rowCount = Math.max(1, maxSlotIndex >= 0 ? Math.floor(maxSlotIndex / SLOT_COLUMNS) + 1 : 1);
+    const rowHeight = Math.max(safeHeight / rowCount, 1);
+    const row = Math.min(rowCount - 1, Math.max(0, Math.floor(relativeY / rowHeight)));
+
+    return row * SLOT_COLUMNS + column;
 }
 
 function updateLayerOrderForNode(category, nodeId, slotIndex) {

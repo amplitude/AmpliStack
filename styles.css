@@ -236,7 +236,7 @@ body {
     gap: 12px;
     padding: 10px 12px;
     border-radius: var(--radius-md);
-    cursor: grab;
+    cursor: pointer;
     transition: all 0.15s ease;
     border: 1px solid transparent;
 }
@@ -247,7 +247,6 @@ body {
 }
 
 .component-item:active {
-    cursor: grabbing;
     background: var(--color-gray-100);
     border-color: var(--color-primary);
     box-shadow: var(--shadow-md);
