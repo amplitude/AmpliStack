@@ -296,6 +296,11 @@ const amplitudeSdkSelectedBadges = new Set();
 const cdpLikeSourceIds = ['cdp', 'segment', 'tealium'];
 const primaryWarehouseNodeIds = ['bigquery', 'databricks', 'snowflake'];
 const warehouseNodeIds = [...primaryWarehouseNodeIds, 's3'];
+const batchEventTargetIds = new Set(['s3', 'databricks', 'bigquery', 'snowflake']);
+const connectionLabels = new Map(); // connectionKey -> Set<SVGTextElement>
+const BATCH_EVENT_LABEL_TEXT = 'Batch events';
+const EVENT_STREAM_LABEL_TEXT = 'Event stream, cohorts';
+const PAID_ADS_LABEL_TEXT = 'Views,\nClicks,\nSpend';
 
 const globalConnectionRules = [
     {
@@ -1192,10 +1197,12 @@ function renderConnections() {
     svg.setAttribute('height', canvasRect.height);
     svg.setAttribute('viewBox', `0 0 ${canvasRect.width} ${canvasRect.height}`);
     svg.innerHTML = '';
+    connectionLabels.clear();
     
     svg.appendChild(createArrowMarker());
     
     const connections = [];
+    let activationLabelCandidate = null;
     
     combinedRuleDescriptors.forEach(({ rule, tag }) => {
         const sources = resolveSelectorNodes(rule.from);
@@ -1211,8 +1218,18 @@ function renderConnections() {
                 const path = buildConnectorPath(sourceNode, targetNode, canvasRect);
                 if (path) {
                     path.dataset.connectionKey = key;
+                    path.dataset.sourceId = sourceNode.dataset?.id || '';
+                    path.dataset.targetId = targetNode.dataset?.id || '';
                     svg.appendChild(path);
                     connections.push(path);
+                    handleBatchEventsLabel(svg, path, sourceNode, targetNode, key);
+                    activationLabelCandidate = updateActivationLabelCandidate(
+                        activationLabelCandidate,
+                        path,
+                        sourceNode,
+                        targetNode,
+                        key
+                    );
                 }
             });
         });
@@ -1228,8 +1245,18 @@ function renderConnections() {
         const path = buildConnectorPath(sourceNode, targetNode, canvasRect);
         if (path) {
             path.dataset.connectionKey = key;
+            path.dataset.sourceId = sourceId;
+            path.dataset.targetId = targetId;
             svg.appendChild(path);
             connections.push(path);
+            handleBatchEventsLabel(svg, path, sourceNode, targetNode, key);
+            activationLabelCandidate = updateActivationLabelCandidate(
+                activationLabelCandidate,
+                path,
+                sourceNode,
+                targetNode,
+                key
+            );
         }
     });
 
@@ -1237,16 +1264,132 @@ function renderConnections() {
     if (paidAdsPath) {
         connections.push(paidAdsPath);
     }
+
+    applyActivationLabel(svg, activationLabelCandidate);
     
     connections.forEach(path => {
         path.addEventListener('click', () => {
             const key = path.dataset.connectionKey;
             if (key) {
                 dismissedConnections.add(key);
+                removeConnectionLabel(key);
             }
             path.remove();
         }, { once: true });
     });
+}
+
+function handleBatchEventsLabel(svg, path, sourceNode, targetNode, connectionKey) {
+    if (!svg || !path || !connectionKey) return;
+    if (!shouldLabelBatchEvents(sourceNode, targetNode)) return;
+    const label = createConnectionLabel(svg, path, BATCH_EVENT_LABEL_TEXT, connectionKey);
+    if (label) {
+        registerConnectionLabel(connectionKey, label);
+    }
+}
+
+function updateActivationLabelCandidate(currentCandidate, path, sourceNode, targetNode, connectionKey) {
+    if (!path || !connectionKey) return currentCandidate;
+    if (!canLabelActivationConnection(sourceNode, targetNode)) return currentCandidate;
+    const targetRect = targetNode?.getBoundingClientRect?.();
+    if (!targetRect) return currentCandidate;
+    const candidateX = targetRect.left;
+    if (!currentCandidate || candidateX < currentCandidate.targetX) {
+        return {
+            path,
+            connectionKey,
+            targetX: candidateX
+        };
+    }
+    return currentCandidate;
+}
+
+function applyActivationLabel(svg, candidate) {
+    if (!svg || !candidate) return;
+    const label = createConnectionLabel(svg, candidate.path, EVENT_STREAM_LABEL_TEXT, candidate.connectionKey);
+    if (label) {
+        registerConnectionLabel(candidate.connectionKey, label);
+    }
+}
+
+function shouldLabelBatchEvents(sourceNode, targetNode) {
+    const sourceId = sourceNode?.dataset?.id;
+    const targetId = targetNode?.dataset?.id;
+    if (!sourceId || !targetId) return false;
+    const amplitudeId = 'amplitude-analytics';
+    const amplitudeToWarehouse = sourceId === amplitudeId && batchEventTargetIds.has(targetId);
+    const warehouseToAmplitude = batchEventTargetIds.has(sourceId) && targetId === amplitudeId;
+    return amplitudeToWarehouse || warehouseToAmplitude;
+}
+
+function canLabelActivationConnection(sourceNode, targetNode) {
+    const sourceId = sourceNode?.dataset?.id;
+    const targetCategory = targetNode?.dataset?.category;
+    if (!sourceId || !targetCategory) return false;
+    return sourceId === 'amplitude-analytics' && targetCategory === 'activation';
+}
+
+function createConnectionLabel(svg, path, labelText, connectionKey) {
+    if (!svg || !path || !labelText) return null;
+    if (typeof path.getTotalLength !== 'function') return null;
+    let totalLength;
+    try {
+        totalLength = path.getTotalLength();
+    } catch {
+        return null;
+    }
+    if (!Number.isFinite(totalLength) || totalLength <= 0) return null;
+    const midpoint = path.getPointAtLength(totalLength / 2);
+    const label = document.createElementNS(SVG_NS, 'text');
+    label.setAttribute('x', midpoint.x);
+    const lines = String(labelText).split('\n');
+    const verticalOffset = (lines.length - 1) * 6;
+    label.setAttribute('y', midpoint.y - 8 - verticalOffset / 2);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'central');
+    label.classList.add('connection-label');
+    label.setAttribute('pointer-events', 'none');
+    if (connectionKey) {
+        label.dataset.connectionKey = connectionKey;
+    }
+    if (lines.length === 1) {
+        label.textContent = labelText;
+    } else {
+        lines.forEach((line, index) => {
+            const tspan = document.createElementNS(SVG_NS, 'tspan');
+            tspan.textContent = line;
+            tspan.setAttribute('x', midpoint.x);
+            tspan.setAttribute('dy', index === 0 ? 0 : '1.1em');
+            label.appendChild(tspan);
+        });
+    }
+    svg.appendChild(label);
+    return label;
+}
+
+function registerConnectionLabel(connectionKey, label) {
+    if (!connectionKey || !label) return;
+    if (!connectionLabels.has(connectionKey)) {
+        connectionLabels.set(connectionKey, new Set());
+    }
+    connectionLabels.get(connectionKey).add(label);
+}
+
+function removeConnectionLabel(connectionKey) {
+    if (!connectionKey) return;
+    const labels = connectionLabels.get(connectionKey);
+    if (labels) {
+        labels.forEach(label => label.remove());
+        connectionLabels.delete(connectionKey);
+    }
+}
+
+function addPaidAdsLabel(svg, path) {
+    if (!svg || !path) return;
+    const label = createConnectionLabel(svg, path, PAID_ADS_LABEL_TEXT, 'paid-ads-direct');
+    if (label) {
+        registerConnectionLabel('paid-ads-direct', label);
+    }
 }
 
 function ensureConnectionLayer() {
@@ -1371,6 +1514,8 @@ function renderPaidAdsAdditionalConnection(svg, canvasRect) {
 
     const path = document.createElementNS(SVG_NS, 'path');
     path.dataset.connectionKey = 'paid-ads-direct';
+    path.dataset.sourceId = paidAdsNode.dataset?.id || '';
+    path.dataset.targetId = amplitudeAnalyticsNode.dataset?.id || '';
     path.setAttribute('d', pathData);
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke', CONNECTION_COLOR);
@@ -1379,6 +1524,7 @@ function renderPaidAdsAdditionalConnection(svg, canvasRect) {
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('marker-end', 'url(#connection-arrow)');
     svg.appendChild(path);
+    addPaidAdsLabel(svg, path);
     return path;
 }
 

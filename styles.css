@@ -778,6 +778,19 @@ body {
     cursor: pointer;
 }
 
+.connection-layer .connection-label {
+    font-size: 10px;
+    font-style: italic;
+    font-weight: 400;
+    letter-spacing: 0.2px;
+    fill: var(--color-gray-500);
+    stroke: rgba(255, 255, 255, 0.95);
+    stroke-width: 3;
+    paint-order: stroke fill;
+    pointer-events: none;
+    user-select: none;
+}
+
 /* Model picker */
 .model-picker {
     position: fixed;
