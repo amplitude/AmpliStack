@@ -43,6 +43,7 @@
     --canvas-padding: 40px;
     --layer-gap: 16px;
     --layer-min-height: 120px;
+    --slot-columns: 6;
     --model-picker-gap: 20px;
     --model-picker-height: 72px;
     --model-picker-space: calc(var(--model-picker-gap) + var(--model-picker-height));
@@ -462,9 +463,44 @@ body {
     padding: 48px 24px 24px;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 16px;
+    gap: var(--layer-gap);
     justify-items: stretch;
     align-items: start;
+    position: relative;
+}
+
+.slot-guide-layer {
+    position: absolute;
+    inset: 0;
+    padding: inherit;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: repeat(var(--slot-columns, 6), minmax(0, 1fr));
+    grid-auto-rows: 58px;
+    gap: var(--layer-gap);
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.layer-content.slot-guides-visible .slot-guide-layer {
+    opacity: 1;
+}
+
+.slot-guide-ghost {
+    border: 2px dashed rgba(14, 165, 233, 0.45);
+    border-radius: var(--radius-lg);
+    background: rgba(14, 165, 233, 0.08);
+    min-height: 58px;
+    max-height: 58px;
+    width: 100%;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+
+.layer-content.slot-guides-visible .diagram-node {
+    position: relative;
+    z-index: 2;
 }
 
 /* Layer color variants */

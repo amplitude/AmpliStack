@@ -4,6 +4,12 @@ function buildConnectionKey(sourceNode, targetNode, tag = 'default') {
     return `${sourceId}->${targetId}:${tag}`;
 }
 
+function buildConnectionPairKey(sourceNode, targetNode) {
+    const sourceId = sourceNode?.dataset?.id || sourceNode?.dataset?.category || 'unknown-source';
+    const targetId = targetNode?.dataset?.id || targetNode?.dataset?.category || 'unknown-target';
+    return `${sourceId}->${targetId}`;
+}
+
 function buildCustomConnectionKey(sourceId, targetId) {
     return `custom:${sourceId}->${targetId}`;
 }
@@ -65,7 +71,8 @@ const categories = {
             { id: 'bigquery', name: 'BigQuery', icon: 'bigquery' },
             { id: 'databricks', name: 'Databricks', icon: 'databricks' },
             { id: 'bi', name: 'BI', icon: 'looker' },
-            { id: 's3', name: 'S3', icon: 'looker' }
+            { id: 's3', name: 'S3', icon: 'looker' },
+            { id: 'llm', name: 'LLM', icon: 'llm' }
         ]
     },
     activation: {
@@ -119,6 +126,7 @@ const dismissedConnections = new Set();
 const customConnections = new Set();
 let pendingConnectionNode = null;
 let draggedNode = null;
+let slotGuidesVisible = false;
 
 // Icon SVG templates
 const icons = {
@@ -310,6 +318,7 @@ const connectionLabels = new Map(); // connectionKey -> Set<SVGTextElement>
 const BATCH_EVENT_LABEL_TEXT = 'Batch events';
 const EVENT_STREAM_LABEL_TEXT = 'Event stream, cohorts';
 const PAID_ADS_LABEL_TEXT = 'Views,\nClicks,\nSpend';
+const MCP_LABEL_TEXT = 'MCP';
 
 const globalConnectionRules = [
     {
@@ -327,10 +336,11 @@ const globalConnectionRules = [
         from: { ids: cdpLikeSourceIds },
         to: { category: 'analysis' },
         exclusions: [
-            { targetIds: ['bi'] }
+            { targetIds: ['bi', 'llm'] }
         ]
     },
     { from: { ids: cdpLikeSourceIds }, to: { category: 'activation' } },
+    { from: { ids: ['amplitude-analytics'] }, to: { ids: ['llm'] } },
     { from: { ids: ['amplitude-analytics'] }, to: { ids: primaryWarehouseNodeIds } },
     { from: { ids: ['amplitude-analytics'] }, to: { category: 'activation' } },
     { from: { ids: warehouseNodeIds }, to: { ids: ['bi'] } }
@@ -402,6 +412,9 @@ let customEntryCounter = 0;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
+    if (document?.documentElement) {
+        document.documentElement.style.setProperty('--slot-columns', String(SLOT_COLUMNS));
+    }
     initCategoryPicker();
     initCustomEntryInput();
     initModelPicker();
@@ -972,6 +985,75 @@ function setNodeSlotPosition(node, slotIndex) {
     node.style.gridRow = `${row} / span 1`;
 }
 
+function showSlotGuides() {
+    if (slotGuidesVisible) return;
+    slotGuidesVisible = true;
+    document.querySelectorAll('.layer-content').forEach(content => {
+        refreshSlotGuideLayer(content);
+        content.classList.add('slot-guides-visible');
+    });
+}
+
+function hideSlotGuides() {
+    if (!slotGuidesVisible) return;
+    slotGuidesVisible = false;
+    document.querySelectorAll('.layer-content.slot-guides-visible').forEach(content => {
+        content.classList.remove('slot-guides-visible');
+    });
+}
+
+function refreshSlotGuideLayer(content) {
+    const guideLayer = ensureSlotGuideLayer(content);
+    const rowsToShow = getSlotGuideRowCount(content);
+    const totalSlots = rowsToShow * SLOT_COLUMNS;
+    const currentSlots = guideLayer.children.length;
+    if (currentSlots > totalSlots) {
+        while (guideLayer.children.length > totalSlots) {
+            guideLayer.removeChild(guideLayer.lastChild);
+        }
+    } else if (currentSlots < totalSlots) {
+        for (let i = currentSlots; i < totalSlots; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'slot-guide-ghost';
+            guideLayer.appendChild(slot);
+        }
+    }
+}
+
+function ensureSlotGuideLayer(content) {
+    let guideLayer = content.querySelector('.slot-guide-layer');
+    if (!guideLayer) {
+        guideLayer = document.createElement('div');
+        guideLayer.className = 'slot-guide-layer';
+        guideLayer.setAttribute('aria-hidden', 'true');
+        content.appendChild(guideLayer);
+    }
+    return guideLayer;
+}
+
+function getSlotGuideRowCount(content) {
+    const nodes = Array.from(content.querySelectorAll('.diagram-node'));
+    let highestSlotIndex = -1;
+    nodes.forEach(node => {
+        const slotIndex = Number(node.dataset?.slotIndex);
+        if (!Number.isNaN(slotIndex)) {
+            highestSlotIndex = Math.max(highestSlotIndex, slotIndex);
+        }
+    });
+    const category = getLayerCategoryFromContent(content);
+    if (category) {
+        const slots = ensureLayerSlots(category);
+        slots.forEach((id, index) => {
+            if (id) {
+                highestSlotIndex = Math.max(highestSlotIndex, index);
+            }
+        });
+    }
+    const rowsFromHighestIndex = highestSlotIndex >= 0 ? Math.floor(highestSlotIndex / SLOT_COLUMNS) + 1 : 0;
+    const rowsFromNodeCount = nodes.length ? Math.ceil(nodes.length / SLOT_COLUMNS) : 0;
+    return Math.max(1, rowsFromHighestIndex, rowsFromNodeCount);
+}
+
 function getLayerElementFromTarget(target) {
     if (!target) return null;
     if (target.classList?.contains('layer')) return target;
@@ -997,9 +1079,11 @@ function handleDragStart(e) {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', draggedNode.dataset.id);
     requestAnimationFrame(() => draggedNode.classList.add('dragging'));
+    showSlotGuides();
 }
 
 function handleDragEnd() {
+    hideSlotGuides();
     if (draggedNode) {
         draggedNode.classList.remove('dragging');
         draggedNode = null;
@@ -1211,6 +1295,7 @@ function renderConnections() {
     svg.setAttribute('viewBox', `0 0 ${canvasRect.width} ${canvasRect.height}`);
     svg.innerHTML = '';
     connectionLabels.clear();
+    const ruleConnectionPairs = new Set();
     
     svg.appendChild(createArrowMarker());
     
@@ -1227,6 +1312,9 @@ function renderConnections() {
                 if (sourceNode === targetNode) return;
                 if (shouldSuppressConnection(sourceNode, targetNode, suppressors)) return;
                 if (shouldSkipConnection(rule, sourceNode, targetNode)) return;
+                const pairKey = buildConnectionPairKey(sourceNode, targetNode);
+                if (ruleConnectionPairs.has(pairKey)) return;
+                ruleConnectionPairs.add(pairKey);
                 const key = buildConnectionKey(sourceNode, targetNode, `rule-${tag}`);
                 if (dismissedConnections.has(key)) return;
                 const path = buildConnectorPath(sourceNode, targetNode, canvasRect);
@@ -1238,6 +1326,7 @@ function renderConnections() {
                     connections.push(path);
                     registerConnectedPair(connectedPairs, sourceNode.dataset?.id, targetNode.dataset?.id);
                     handleBatchEventsLabel(svg, path, sourceNode, targetNode, key);
+                    handleMcpLabel(svg, path, sourceNode, targetNode, key);
                     activationLabelCandidate = updateActivationLabelCandidate(
                         activationLabelCandidate,
                         path,
@@ -1266,6 +1355,7 @@ function renderConnections() {
             connections.push(path);
             registerConnectedPair(connectedPairs, sourceId, targetId);
             handleBatchEventsLabel(svg, path, sourceNode, targetNode, key);
+            handleMcpLabel(svg, path, sourceNode, targetNode, key);
             activationLabelCandidate = updateActivationLabelCandidate(
                 activationLabelCandidate,
                 path,
@@ -1305,6 +1395,15 @@ function handleBatchEventsLabel(svg, path, sourceNode, targetNode, connectionKey
     }
 }
 
+function handleMcpLabel(svg, path, sourceNode, targetNode, connectionKey) {
+    if (!svg || !path || !connectionKey) return;
+    if (!shouldLabelMcpConnection(sourceNode, targetNode)) return;
+    const label = createConnectionLabel(svg, path, MCP_LABEL_TEXT, connectionKey);
+    if (label) {
+        registerConnectionLabel(connectionKey, label);
+    }
+}
+
 function updateActivationLabelCandidate(currentCandidate, path, sourceNode, targetNode, connectionKey) {
     if (!path || !connectionKey) return currentCandidate;
     if (!canLabelActivationConnection(sourceNode, targetNode)) return currentCandidate;
@@ -1337,6 +1436,14 @@ function shouldLabelBatchEvents(sourceNode, targetNode) {
     const amplitudeToWarehouse = sourceId === amplitudeId && batchEventTargetIds.has(targetId);
     const warehouseToAmplitude = batchEventTargetIds.has(sourceId) && targetId === amplitudeId;
     return amplitudeToWarehouse || warehouseToAmplitude;
+}
+
+function shouldLabelMcpConnection(sourceNode, targetNode) {
+    const sourceId = sourceNode?.dataset?.id;
+    const targetId = targetNode?.dataset?.id;
+    if (!sourceId || !targetId) return false;
+    const pair = new Set([sourceId, targetId]);
+    return pair.has('llm') && pair.has('amplitude-analytics');
 }
 
 function canLabelActivationConnection(sourceNode, targetNode) {
