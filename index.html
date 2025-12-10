@@ -6,6 +6,14 @@
     <title>AmpliStack | Amplitude</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.amplitude.com/script/b9c4712e45db54f13f1ce8785be948cd.js"></script>
+    <script>
+        window.amplitude.add(window.sessionReplay.plugin({ sampleRate: 1 }));
+        window.amplitude.init('b9c4712e45db54f13f1ce8785be948cd', {
+            fetchRemoteConfig: true,
+            autocapture: false
+        });
+    </script>
 </head>
 <body>
     <div class="app-body">

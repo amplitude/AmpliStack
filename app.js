@@ -404,10 +404,48 @@ const customEntries = {
 // Counter for unique custom entry IDs
 let customEntryCounter = 0;
 
+function trackNodeAdded(nodeName) {
+    try {
+        const amp = window?.amplitude;
+        const props = { 'node name': nodeName };
+        if (amp?.track) {
+            amp.track('node added', props);
+        } else if (amp?.getInstance) {
+            amp.getInstance().logEvent?.('node added', props);
+        }
+    } catch (err) {
+        console.warn('Failed to track node added', err);
+    }
+}
+
+function trackExportButtonClick() {
+    try {
+        const amp = window?.amplitude;
+        if (amp?.track) {
+            amp.track('export button clicked');
+        } else if (amp?.getInstance) {
+            amp.getInstance().logEvent?.('export button clicked');
+        }
+    } catch (err) {
+        console.warn('Failed to track export button click', err);
+    }
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
     if (document?.documentElement) {
         document.documentElement.style.setProperty('--slot-columns', String(SLOT_COLUMNS));
+    }
+    // Track initial load once the DOM is ready
+    try {
+        const amp = window?.amplitude;
+        if (amp?.track) {
+            amp.track('App Launched');
+        } else if (amp?.getInstance) {
+            amp.getInstance().logEvent?.('App Launched');
+        }
+    } catch (err) {
+        console.warn('Failed to track App Launched', err);
     }
     initCategoryPicker();
     initCustomEntryInput();
@@ -542,6 +580,7 @@ async function initExportButton() {
     if (!exportBtn) return;
     const idleAriaLabel = exportBtn.getAttribute('aria-label') || 'Export diagram';
     exportBtn.addEventListener('click', async () => {
+        trackExportButtonClick();
         try {
             const canvasElement = document.querySelector('.canvas');
             if (!canvasElement) return;
@@ -692,6 +731,7 @@ function addItemToLayer(itemId, itemName, iconKey, category) {
     // Update sidebar item state
     updateSidebarItemState(itemId, category, true);
     renderConnections();
+    trackNodeAdded(itemName);
 }
 
 function ensureItemAdded(itemId) {
