@@ -55,7 +55,7 @@ const categories = {
         name: 'Data Sources',
         layer: 'sources',
         items: [
-            { id: 'amplitude-sdk', name: 'Amplitude SDK', icon: 'amplitude-mark' },
+            { id: 'amplitude-sdk', name: 'Amplitude SDK', icon: 'amplitude' },
             { id: 'segment', name: 'Segment', icon: 'segment-mark' },
             { id: 'tealium', name: 'Tealium', icon: 'tealium' },
             { id: 'api', name: 'HTTP API', icon: 'api' },
@@ -67,12 +67,12 @@ const categories = {
         name: 'Analysis / Warehouse',
         layer: 'analysis',
         items: [
-            { id: 'amplitude-analytics', name: 'Amplitude Analytics', icon: 'amplitude-mark' },
+            { id: 'amplitude-analytics', name: 'Amplitude Analytics', icon: 'amplitude' },
             { id: 'snowflake', name: 'Snowflake', icon: 'snowflake' },
             { id: 'bigquery', name: 'BigQuery', icon: 'bigquery' },
             { id: 'databricks', name: 'Databricks', icon: 'databricks' },
             { id: 'bi', name: 'BI', icon: 'looker' },
-            { id: 's3', name: 'S3', icon: 'looker' },
+            { id: 's3', name: 'S3', icon: 's3' },
             { id: 'llm', name: 'LLM', icon: 'llm' }
         ]
     },
@@ -80,7 +80,7 @@ const categories = {
         name: 'Activation',
         layer: 'activation',
         items: [
-            { id: 'braze', name: 'Braze', icon: 'braze-mark' },
+            { id: 'braze', name: 'Braze', icon: 'braze' },
             { id: 'iterable', name: 'Iterable', icon: 'iterable' },
             { id: 'salesforce', name: 'Salesforce', icon: 'salesforce' },
             { id: 'hubspot', name: 'HubSpot', icon: 'hubspot' },
@@ -176,6 +176,12 @@ const icons = {
         <line x1="8" y1="21" x2="16" y2="21"/>
         <line x1="12" y1="17" x2="12" y2="21"/>
     </svg>`,
+    'ott': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="5" width="18" height="12" rx="2"/>
+        <line x1="8" y1="19" x2="16" y2="19"/>
+        <line x1="12" y1="17" x2="12" y2="19"/>
+        <polygon points="11 10 11 14 15 12 11 10"/>
+    </svg>`,
     'mobile': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
         <line x1="12" y1="18" x2="12.01" y2="18"/>
@@ -194,6 +200,23 @@ const icons = {
         <circle cx="20" cy="21" r="1"/>
         <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
     </svg>`,
+    'call-center': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 12a7 7 0 0 1 14 0"/>
+        <path d="M5 12v3a2 2 0 0 0 2 2h1"/>
+        <path d="M19 12v3a2 2 0 0 1-2 2h-1"/>
+        <path d="M9 17v1a2 2 0 0 0 2 2h2"/>
+        <circle cx="8" cy="12" r="1"/>
+        <circle cx="16" cy="12" r="1"/>
+    </svg>`,
+    'pos': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="6" y="3" width="12" height="18" rx="2"/>
+        <rect x="8" y="7" width="8" height="4" rx="1"/>
+        <line x1="9" y1="13" x2="11" y2="13"/>
+        <line x1="13" y1="13" x2="15" y2="13"/>
+        <line x1="9" y1="16" x2="9.01" y2="16"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+        <line x1="15" y1="16" x2="15.01" y2="16"/>
+    </svg>`,
     'onboarding': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
         <circle cx="9" cy="7" r="4"/>
@@ -202,25 +225,29 @@ const icons = {
     </svg>`,
     
     // Data Sources
-    'amplitude': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="12 2 22 20 2 20 12 2"/>
-    </svg>`,
+    'amplitude': `<img src="assets/amplitude.png" alt="S3 logo" style="display:block; height:20px; width:auto;" />`,
+
+    'tealium': `<img src="assets/tealium.png" alt="Tealium logo" style="display:block; height:20px; width:auto;" />`,
     'api': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="16 18 22 12 16 6"/>
         <polyline points="8 6 2 12 8 18"/>
     </svg>`,
     'etl': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="6" height="6" rx="1"/>
-        <rect x="15" y="3" width="6" height="6" rx="1"/>
-        <rect x="3" y="15" width="6" height="6" rx="1"/>
-        <path d="M6 9v6"/>
-        <path d="M9 6h6"/>
-        <path d="M15 12v6"/>
+        <rect x="2.5" y="9" width="5" height="6" rx="1"/>
+        <path d="M7.5 12h6"/>
+        <path d="M11 8l4 4-4 4"/>
+        <rect x="15.5" y="7" width="6" height="10" rx="2"/>
     </svg>`,
     'cdp': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <ellipse cx="12" cy="5" rx="9" ry="3"/>
-        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+        <circle cx="6" cy="12" r="2"/>
+        <circle cx="12" cy="6" r="2"/>
+        <circle cx="12" cy="18" r="2"/>
+        <circle cx="18" cy="12" r="2"/>
+        <path d="M7.4 10.6l3.2-3.2"/>
+        <path d="M7.4 13.4l3.2 3.2"/>
+        <path d="M16.6 10.6l-3.2-3.2"/>
+        <path d="M16.6 13.4l-3.2 3.2"/>
+        <path d="M8 12h8"/>
     </svg>`,
     'crm': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -235,69 +262,31 @@ const icons = {
     </svg>`,
     
     // Analysis
-    'snowflake': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="12" y1="2" x2="12" y2="22"/>
-        <path d="M20 6L4 18"/>
-        <path d="M4 6l16 12"/>
-        <line x1="4" y1="12" x2="20" y2="12"/>
-    </svg>`,
-    'bigquery': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-        <line x1="9" y1="9" x2="15" y2="15"/>
-        <line x1="9" y1="15" x2="15" y2="9"/>
-    </svg>`,
-    'redshift': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-        <polyline points="2 17 12 22 22 17"/>
-        <polyline points="2 12 12 17 22 12"/>
-    </svg>`,
-    'databricks': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="7" height="7"/>
-        <rect x="14" y="3" width="7" height="7"/>
-        <rect x="14" y="14" width="7" height="7"/>
-        <rect x="3" y="14" width="7" height="7"/>
-    </svg>`,
-    'looker': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="8"/>
-        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        <line x1="11" y1="8" x2="11" y2="14"/>
-        <line x1="8" y1="11" x2="14" y2="11"/>
-    </svg>`,
+    'amplitude': `<img src="assets/amplitude.svg" alt="amplitude logo" style="display:block; height:20px; width:auto;" />`,
+
+    'bigquery': `<img src="assets/bq.svg" alt="bq logo" style="display:block; height:20px; width:auto;" />`,
+    'snowflake': `<img src="assets/snowflake.png" alt="snowflake logo" style="display:block; height:20px; width:auto;" />`,
+    'llm': `<img src="assets/llm.png" alt="llm logo" style="display:block; height:20px; width:auto;" />`,
+
+    'databricks': `<img src="assets/databricks.png" alt="S3 logo" style="display:block; height:20px; width:auto;" />`,
+    's3': `<img src="assets/s3.png" alt="S3 logo" style="display:block; height:20px; width:auto;" />`,
+
     
     // Activation
     'segment': `<img src="assets/image-7cdc5575-456d-447a-bf0b-5be09cd63492.png" alt="Segment logo" width="20" height="20" style="display:block;" />`,
-    'braze': `<img src="assets/image-437456e2-68fb-462c-a2f0-ea67f946a2e7.png" alt="Braze logo" width="20" height="20" style="display:block;" />`,
-    'iterable': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="17 1 21 5 17 9"/>
-        <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-        <polyline points="7 23 3 19 7 15"/>
-        <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-    </svg>`,
-    'salesforce': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-    </svg>`,
-    'hubspot': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/>
-        <circle cx="12" cy="5" r="2"/>
-        <circle cx="12" cy="19" r="2"/>
-        <line x1="12" y1="7" x2="12" y2="9"/>
-        <line x1="12" y1="15" x2="12" y2="17"/>
-    </svg>`,
-    'marketo': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-    </svg>`,
-    'intercom': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-    </svg>`,
-    
+    'braze': `<img src="assets/braze.png" alt="Braze logo" width="20" height="20" style="display:block;" />`,
+    'iterable': `<img src="assets/iterable.png" alt="iterable logo" width="20" height="20" style="display:block;" />`,
+    'salesforce': `<img src="assets/salesforce.png" alt="salesforce logo" width="20" height="20" style="display:block;" />`,
+    'hubspot': `<img src="assets/hubspot.png" alt="hubspot logo" width="20" height="20" style="display:block;" />`,
+    'marketo': `<img src="assets/marketo.webp" alt="marketo logo" width="20" height="20" style="display:block;" />`,
+    'intercom': `<img src="assets/intercom.svg" alt="intercom logo" width="20" height="20" style="display:block;" />`,
+
     // Custom entry icon
     'custom': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
         <line x1="12" y1="8" x2="12" y2="16"/>
         <line x1="8" y1="12" x2="16" y2="12"/>
     </svg>`,
-    'amplitude-mark': `<img src="https://cdn.prod.website-files.com/64da81538e9bdebe7ae2fa11/64ee6c441b07b9e11db3dc92_A%20mark%20circle.svg" alt="Amplitude logo" width="20" height="20" style="display:block;" />`,
-    'braze-mark': `<img src="https://cdn-public.softwarereviews.com/production/favicons/offerings/8887/original/braze_fav.png" alt="Braze logo" width="20" height="20" style="display:block;" />`,
     'segment-mark': `<img src="https://cdn.prod.website-files.com/60a4d4a53dd0c3f45579ac64/60ccab91521f5d2546df4610_5e8db5423d0e429ff92af6d4_segment-logo-FCBB33F58E-seeklogo.com.png" alt="Segment logo" width="20" height="20" style="display:block;" />`
 };
 
@@ -559,9 +548,10 @@ async function initExportButton() {
             await loadHtml2Canvas();
             exportBtn.disabled = true;
             exportBtn.setAttribute('aria-label', 'Exporting diagram');
+            // Force at least 2x scale so exports stay crisp on non‑retina displays.
             const options = {
                 backgroundColor: '#FFFFFF',
-                scale: window.devicePixelRatio || 2,
+                scale: Math.max(window.devicePixelRatio || 1, 2),
                 scrollX: 0,
                 scrollY: -window.scrollY,
                 useCORS: true
