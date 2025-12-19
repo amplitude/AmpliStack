@@ -18,9 +18,9 @@ export const categories = {
         name: 'Owned Experiences',
         layer: 'experiences',
         items: [
+            { id: 'website', name: 'Website', icon: 'globe' },
             { id: 'web-app', name: 'Web App', icon: 'web' },
             { id: 'mobile-app', name: 'Mobile App', icon: 'mobile' },
-            { id: 'website', name: 'Website', icon: 'globe' },
             { id: 'ott', name: 'OTT', icon: 'ott' },
             { id: 'call-center', name: 'Call Center', icon: 'call-center' },
             { id: 'pos', name: 'PoS', icon: 'pos' }
