@@ -639,6 +639,7 @@ export async function initializeApp() {
     initModelPicker();
     initLayerDragTargets();
     initExportButton();
+    initCopyLinkButton();
     initRefreshButton();
     const restored = await restoreDiagramStateFromStorage();
     if (!restored) {
@@ -732,6 +733,20 @@ function initRefreshButton() {
     if (!refreshBtn) return;
     refreshBtn.addEventListener('click', () => {
         clearDiagram();
+    });
+}
+
+function initCopyLinkButton() {
+    const copyBtn = document.getElementById('copy-link-btn');
+    if (!copyBtn) return;
+    copyBtn.addEventListener('click', async () => {
+        try {
+            await persistDiagramState();
+            const url = new URL(window.location.href);
+            await navigator.clipboard.writeText(url.toString());
+        } catch (error) {
+            console.error('Failed to copy link', error);
+        }
     });
 }
 
