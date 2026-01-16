@@ -14,6 +14,9 @@ import {
     customConnections,
     customEntries,
     dismissedConnections,
+    connectionAnnotations,
+    dottedConnections,
+    nodeNotes,
     getNextCustomEntryId,
     resetCustomEntryCounter,
     layerOrder,
@@ -46,6 +49,9 @@ import {
 let pendingConnectionNode = null;
 let draggedNode = null;
 let slotGuidesVisible = false;
+let activeNoteNode = null;
+let activeNoteNodeId = null;
+let noteEditor = null;
 
 export function initCategoryPicker() {
     const tabs = document.querySelectorAll('.category-tab');
@@ -327,6 +333,13 @@ function createDiagramNode(itemId, itemName, iconKey, category) {
                 <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
         </button>
+        <button class="node-note" title="Add note">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="4" width="12" height="16" rx="2" ry="2"/>
+                <line x1="9" y1="10" x2="15" y2="10"/>
+                <line x1="9" y1="14" x2="15" y2="14"/>
+            </svg>
+        </button>
         <button class="node-connect" title="Draw connection">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"/>
@@ -354,6 +367,12 @@ function createDiagramNode(itemId, itemName, iconKey, category) {
         startConnectionFromNode(node);
     });
 
+    const noteBtn = node.querySelector('.node-note');
+    noteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openNodeNoteEditor(node, noteBtn);
+    });
+
     node.addEventListener('click', () => {
         handleNodeClick(node);
     });
@@ -361,7 +380,102 @@ function createDiagramNode(itemId, itemName, iconKey, category) {
     node.addEventListener('dragstart', handleDragStart);
     node.addEventListener('dragend', handleDragEnd);
 
+    const existingNote = nodeNotes[itemId];
+    if (typeof existingNote === 'string' && existingNote.trim()) {
+        node.classList.add('has-note');
+    }
+
     return node;
+}
+
+function ensureNoteEditor() {
+    if (noteEditor) return noteEditor;
+    const textarea = document.createElement('textarea');
+    textarea.rows = 4;
+    textarea.wrap = 'soft';
+    textarea.className = 'node-note-editor';
+    textarea.placeholder = 'Add note';
+    textarea.addEventListener('click', (event) => event.stopPropagation());
+    textarea.addEventListener('input', handleNoteInput);
+    textarea.addEventListener('keydown', handleNoteKeydown);
+    textarea.addEventListener('blur', handleNoteBlur);
+    document.body.appendChild(textarea);
+    noteEditor = textarea;
+    return noteEditor;
+}
+
+function openNodeNoteEditor(node, anchor) {
+    closeNodeNoteEditor();
+    if (!node || !anchor) return;
+    const editor = ensureNoteEditor();
+    activeNoteNode = node;
+    activeNoteNodeId = node.dataset?.id || null;
+    const existing = (activeNoteNodeId && nodeNotes[activeNoteNodeId]) || '';
+    editor.value = existing;
+    positionNodeNoteEditor(anchor);
+    editor.classList.add('visible');
+    editor.focus();
+    editor.setSelectionRange(existing.length, existing.length);
+}
+
+function closeNodeNoteEditor() {
+    if (!noteEditor) return;
+    noteEditor.classList.remove('visible');
+    activeNoteNode = null;
+    activeNoteNodeId = null;
+}
+
+function positionNodeNoteEditor(anchor) {
+    if (!noteEditor || !anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const offset = 8;
+    noteEditor.style.left = `${rect.right + offset}px`;
+    noteEditor.style.top = `${rect.top}px`;
+}
+
+function handleNoteInput(event) {
+    if (!activeNoteNode) return;
+    if (!activeNoteNodeId) {
+        activeNoteNodeId = activeNoteNode.dataset?.id || null;
+    }
+    if (!activeNoteNodeId) return;
+    const value = event.target.value || '';
+    const trimmed = value.trim();
+    if (trimmed) {
+        nodeNotes[activeNoteNodeId] = value;
+        activeNoteNode.classList.add('has-note');
+    } else {
+        delete nodeNotes[activeNoteNodeId];
+        activeNoteNode.classList.remove('has-note');
+    }
+}
+
+function handleNoteKeydown(event) {
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        noteEditor?.blur();
+    }
+}
+
+function handleNoteBlur() {
+    if (activeNoteNode && noteEditor) {
+        if (!activeNoteNodeId) {
+            activeNoteNodeId = activeNoteNode.dataset?.id || null;
+        }
+        if (activeNoteNodeId) {
+            const value = noteEditor.value || '';
+            const trimmed = value.trim();
+            if (trimmed) {
+                nodeNotes[activeNoteNodeId] = value;
+                activeNoteNode.classList.add('has-note');
+            } else {
+                delete nodeNotes[activeNoteNodeId];
+                activeNoteNode.classList.remove('has-note');
+            }
+            void persistDiagramState();
+        }
+    }
+    closeNodeNoteEditor();
 }
 
 function attachAmplitudeSdkBadges(node) {
@@ -418,6 +532,7 @@ function removeItemFromLayer(itemId, category, node) {
         if (index !== -1) {
             slots[index] = null;
         }
+        delete nodeNotes[itemId];
         updateSidebarItemState(itemId, category, false);
         removeRelatedCustomConnections(itemId);
         enforceNodeOrdering();
@@ -663,6 +778,9 @@ async function restoreDiagramStateFromStorage() {
         });
         customConnections.clear();
         dismissedConnections.clear();
+        dottedConnections.clear();
+        Object.keys(connectionAnnotations).forEach(key => delete connectionAnnotations[key]);
+        Object.keys(nodeNotes).forEach(key => delete nodeNotes[key]);
         amplitudeSdkSelectedBadges.clear();
         clearCustomItemIndex();
 
@@ -704,6 +822,14 @@ async function restoreDiagramStateFromStorage() {
             setActiveCategory(stored.activeCategory);
         }
 
+        if (stored.nodeNotes && typeof stored.nodeNotes === 'object') {
+            Object.entries(stored.nodeNotes).forEach(([id, value]) => {
+                if (typeof value === 'string' && value.trim()) {
+                    nodeNotes[id] = value;
+                }
+            });
+        }
+
         Object.keys(addedItems).forEach(category => {
             const slots = layerOrder[category] || [];
             slots.forEach(id => {
@@ -716,6 +842,14 @@ async function restoreDiagramStateFromStorage() {
 
         (stored.customConnections || []).forEach(key => customConnections.add(key));
         (stored.dismissedConnections || []).forEach(key => dismissedConnections.add(key));
+        (stored.dottedConnections || []).forEach(key => dottedConnections.add(key));
+        if (stored.connectionAnnotations && typeof stored.connectionAnnotations === 'object') {
+            Object.entries(stored.connectionAnnotations).forEach(([key, value]) => {
+                if (typeof value === 'string' && value.trim()) {
+                    connectionAnnotations[key] = value;
+                }
+            });
+        }
 
         updateCategoryTabState();
         updateModelPickerState();
@@ -766,6 +900,9 @@ function clearDiagram() {
     });
     customConnections.clear();
     dismissedConnections.clear();
+    dottedConnections.clear();
+    Object.keys(connectionAnnotations).forEach(key => delete connectionAnnotations[key]);
+    Object.keys(nodeNotes).forEach(key => delete nodeNotes[key]);
     amplitudeSdkSelectedBadges.clear();
     Object.keys(customEntries).forEach(category => {
         customEntries[category] = [];
