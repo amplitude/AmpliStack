@@ -48,6 +48,9 @@ import {
 let pendingConnectionNode = null;
 let draggedNode = null;
 let slotGuidesVisible = false;
+let activeNoteNode = null;
+let noteEditor = null;
+const nodeNotes = new WeakMap();
 
 export function initCategoryPicker() {
     const tabs = document.querySelectorAll('.category-tab');
@@ -329,6 +332,13 @@ function createDiagramNode(itemId, itemName, iconKey, category) {
                 <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
         </button>
+        <button class="node-note" title="Add note">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="4" width="12" height="16" rx="2" ry="2"/>
+                <line x1="9" y1="10" x2="15" y2="10"/>
+                <line x1="9" y1="14" x2="15" y2="14"/>
+            </svg>
+        </button>
         <button class="node-connect" title="Draw connection">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"/>
@@ -356,6 +366,12 @@ function createDiagramNode(itemId, itemName, iconKey, category) {
         startConnectionFromNode(node);
     });
 
+    const noteBtn = node.querySelector('.node-note');
+    noteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openNodeNoteEditor(node, noteBtn);
+    });
+
     node.addEventListener('click', () => {
         handleNodeClick(node);
     });
@@ -364,6 +380,84 @@ function createDiagramNode(itemId, itemName, iconKey, category) {
     node.addEventListener('dragend', handleDragEnd);
 
     return node;
+}
+
+function ensureNoteEditor() {
+    if (noteEditor) return noteEditor;
+    const textarea = document.createElement('textarea');
+    textarea.rows = 4;
+    textarea.wrap = 'soft';
+    textarea.className = 'node-note-editor';
+    textarea.placeholder = 'Add note';
+    textarea.addEventListener('click', (event) => event.stopPropagation());
+    textarea.addEventListener('input', handleNoteInput);
+    textarea.addEventListener('keydown', handleNoteKeydown);
+    textarea.addEventListener('blur', handleNoteBlur);
+    document.body.appendChild(textarea);
+    noteEditor = textarea;
+    return noteEditor;
+}
+
+function openNodeNoteEditor(node, anchor) {
+    closeNodeNoteEditor();
+    if (!node || !anchor) return;
+    const editor = ensureNoteEditor();
+    activeNoteNode = node;
+    const existing = nodeNotes.get(node) || '';
+    editor.value = existing;
+    positionNodeNoteEditor(anchor);
+    editor.classList.add('visible');
+    editor.focus();
+    editor.setSelectionRange(existing.length, existing.length);
+}
+
+function closeNodeNoteEditor() {
+    if (!noteEditor) return;
+    noteEditor.classList.remove('visible');
+    activeNoteNode = null;
+}
+
+function positionNodeNoteEditor(anchor) {
+    if (!noteEditor || !anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const offset = 8;
+    noteEditor.style.left = `${rect.right + offset}px`;
+    noteEditor.style.top = `${rect.top}px`;
+}
+
+function handleNoteInput(event) {
+    if (!activeNoteNode) return;
+    const value = event.target.value || '';
+    const trimmed = value.trim();
+    if (trimmed) {
+        nodeNotes.set(activeNoteNode, value);
+        activeNoteNode.classList.add('has-note');
+    } else {
+        nodeNotes.delete(activeNoteNode);
+        activeNoteNode.classList.remove('has-note');
+    }
+}
+
+function handleNoteKeydown(event) {
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        noteEditor?.blur();
+    }
+}
+
+function handleNoteBlur() {
+    if (activeNoteNode && noteEditor) {
+        const value = noteEditor.value || '';
+        const trimmed = value.trim();
+        if (trimmed) {
+            nodeNotes.set(activeNoteNode, value);
+            activeNoteNode.classList.add('has-note');
+        } else {
+            nodeNotes.delete(activeNoteNode);
+            activeNoteNode.classList.remove('has-note');
+        }
+    }
+    closeNodeNoteEditor();
 }
 
 function attachAmplitudeSdkBadges(node) {
