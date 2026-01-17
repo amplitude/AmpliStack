@@ -38,11 +38,13 @@
     --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     
     /* Spacing */
-    --header-height: 64px;
+    --header-height: 48px;
     --sidebar-width: 260px;
+    --canvas-width: 1200px;
+    --canvas-height: 500px;
     --canvas-padding: 40px;
     --layer-gap: 16px;
-    --layer-min-height: 120px;
+    --layer-max-height: 81px;
     --slot-columns: 6;
     --model-picker-gap: 20px;
     --model-picker-height: 72px;
@@ -367,8 +369,10 @@ body {
 .canvas-container {
     flex: 1;
     display: flex;
-    justify-content: center;
-    align-items: stretch;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 16px;
     padding: clamp(12px, 2vw, var(--canvas-padding));
     overflow: auto;
     min-height: 0;
@@ -377,12 +381,47 @@ body {
     position: relative;
 }
 
+.diagram-header {
+    width: var(--canvas-width);
+    min-width: var(--canvas-width);
+    max-width: var(--canvas-width);
+    background: var(--color-white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--color-gray-200);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.diagram-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--color-gray-900);
+    outline: none;
+    min-width: 0;
+    flex: 1;
+}
+
+.diagram-title:focus {
+    box-shadow: inset 0 -2px 0 var(--color-primary);
+}
+
+.diagram-last-edited {
+    font-size: 13px;
+    color: var(--color-gray-500);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .canvas {
-    width: 1200px;
-    min-width: 1200px;
-    max-width: 1200px;
-    flex: 0 0 1200px;
-    height: 758px;
+    width: var(--canvas-width);
+    min-width: var(--canvas-width);
+    max-width: var(--canvas-width);
+    flex: 0 0 auto;
+    height: auto;
     background: var(--color-white);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
@@ -403,6 +442,16 @@ body {
     flex-direction: row;
     align-items: center;
     gap: 12px;
+}
+
+.canvas-container.is-exporting .floating-actions {
+    display: none;
+}
+
+.canvas-container.is-exporting {
+    height: auto;
+    max-height: none;
+    overflow: visible;
 }
 
 .export-btn-floating {
@@ -464,17 +513,20 @@ body {
     background: inherit;
     padding: 2px 8px;
     border-radius: var(--radius-sm);
+    z-index: 3;
+    pointer-events: none;
 }
 
 .layer-content {
     flex: 1;
-    padding: 48px 24px 24px;
+    padding: 40px 12px 12px;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: var(--layer-gap);
     justify-items: stretch;
     align-items: start;
     position: relative;
+    min-height: 110px;
 }
 
 .slot-guide-layer {
@@ -788,9 +840,8 @@ body {
 }
 
 .layer-content.drag-over {
-    border-style: solid;
-    border-color: var(--color-primary);
-    background: rgba(14, 165, 233, 0.05);
+    border: none;
+    background: inherit;
 }
 
 /* Node animations */
@@ -1015,6 +1066,10 @@ body {
 }
 
 @media (max-width: 768px) {
+    :root {
+        --canvas-width: 100%;
+    }
+
     .app-body {
         flex-direction: column;
         height: auto;
@@ -1042,6 +1097,22 @@ body {
         padding: 16px;
         height: auto;
         max-height: none;
+    }
+
+    .diagram-header {
+        width: 100%;
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .diagram-title {
+        font-size: 28px;
+        width: 100%;
+    }
+
+    .diagram-last-edited {
+        width: 100%;
+        text-align: left;
     }
 
     .canvas {
