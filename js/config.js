@@ -56,6 +56,10 @@ export const categories = {
         name: 'Activation',
         layer: 'activation',
         items: [
+            { id: 'amp-gs', name: 'Guides & Surveys', icon: 'amplitude' },
+            { id: 'amp-webexp', name: 'Web Experiment', icon: 'amplitude' },
+            { id: 'amp-feaexp', name: 'Feature Experiment', icon: 'amplitude' },
+            { id: 'amp-assistant', name: 'Amplitude Assistant', icon: 'amplitude' },
             { id: 'braze', name: 'Braze', icon: 'braze' },
             { id: 'iterable', name: 'Iterable', icon: 'iterable' },
             { id: 'salesforce', name: 'Salesforce', icon: 'salesforce' },
@@ -82,7 +86,16 @@ export const leftMostPriorityMap = {
 export const SLOT_COLUMNS = 6;
 export const DROP_ZONE_HORIZONTAL_PADDING = 48;
 export const DROP_ZONE_VERTICAL_PADDING = 64;
-export const LAYER_SEQUENCE = ['marketing', 'experiences', 'sources', 'analysis', 'activation'];
+export const DEFAULT_LAYER_SEQUENCE = ['marketing', 'experiences', 'sources', 'analysis', 'activation'];
+export const LAYER_SEQUENCE = DEFAULT_LAYER_SEQUENCE;
+export const DEFAULT_CUSTOM_LANE_NAME = 'New Lane';
+export const CUSTOM_LANE_PALETTES = [
+    { bg: '#FFE8D6', border: '#F4A261', accent: '#E76F51' },
+    { bg: '#E8F6F3', border: '#80CBC4', accent: '#00897B' },
+    { bg: '#F3E8FF', border: '#CE93D8', accent: '#8E24AA' },
+    { bg: '#FFF3E0', border: '#FFB74D', accent: '#F57C00' },
+    { bg: '#E3F2FD', border: '#90CAF9', accent: '#1565C0' }
+];
 export const AMP_ADJACENCY_SOURCE_ID = 'amplitude-sdk';
 export const AMP_ADJACENCY_TARGET_IDS = ['segment', 'tealium', 'cdp'];
 export const MAX_COLUMN_DELTA_FOR_ADJACENCY = 1;
@@ -237,6 +250,10 @@ export const icons = {
     'hubspot': `<img src="assets/hubspot.png" alt="hubspot logo" width="20" height="20" style="display:block;" />`,
     'marketo': `<img src="assets/marketo.webp" alt="marketo logo" width="20" height="20" style="display:block;" />`,
     'intercom': `<img src="assets/intercom.svg" alt="intercom logo" width="20" height="20" style="display:block;" />`,
+    'amp-gs': `<img src="assets/amplitude.svg" alt="amplitude logo" width="20" height="20" style="display:block;" />`,
+    'amp-webexp': `<img src="assets/amplitude.svg" alt="amplitude logo" width="20" height="20" style="display:block;" />`,
+    'amp-feaexp': `<img src="assets/amplitude.svg" alt="amplitude logo" width="20" height="20" style="display:block;" />`,
+    'amp-assistant': `<img src="assets/amplitude.svg" alt="amplitude logo" width="20" height="20" style="display:block;" />`,
 
     // Custom entry icon
     'custom': `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -292,7 +309,13 @@ export const globalConnectionRules = [
             { targetIds: ['bi', 'llm'] }
         ]
     },
-    { from: { ids: cdpLikeSourceIds }, to: { category: 'activation' } },
+    {
+        from: { ids: cdpLikeSourceIds },
+        to: { category: 'activation' },
+        exclusions: [
+            { targetIds: ['amp-gs', 'amp-webexp', 'amp-feaexp', 'amp-assistant'] }
+        ]
+    },
     { from: { ids: ['amplitude-analytics'] }, to: { ids: ['llm'] } },
     { from: { ids: ['amplitude-analytics'] }, to: { ids: primaryWarehouseNodeIds } },
     { from: { ids: ['amplitude-analytics'] }, to: { category: 'activation' } },
