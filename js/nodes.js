@@ -4,7 +4,8 @@ import {
     categories,
     icons,
     itemCategoryIndex,
-    modelAutoConfig
+    modelAutoConfig,
+    DEFAULT_CUSTOM_LANE_NAME
 } from './config.js';
 import {
     activeCategory,
@@ -15,17 +16,27 @@ import {
     diagramTitle,
     customConnections,
     customEntries,
+    customLayers,
     dismissedConnections,
     connectionAnnotations,
     dottedConnections,
     nodeNotes,
     getNextCustomEntryId,
     resetCustomEntryCounter,
+    layerNames,
     layerOrder,
     setActiveCategory,
     setActiveModel,
     setDiagramTitle,
-    setLastEditedAt
+    setLastEditedAt,
+    setLayerName,
+    applyStoredLayerNames,
+    resetLayerNames,
+    registerCustomLayer,
+    resetCustomLayers,
+    unregisterCustomLayer,
+    getCustomLanePalette,
+    isBuiltInLayer
 } from './state.js';
 import {
     assignNodeSlot,
@@ -43,7 +54,8 @@ import {
     parseCustomConnectionKey,
     renderConnections
 } from './connections.js';
-import { trackAppLaunched, trackExportButtonClick, trackNodeAdded } from './analytics.js';
+import { trackAppLaunched, trackExportButtonClick, trackNodeAdded, trackOpenedTemplate } from './analytics.js';
+import { showToast } from './toast.js';
 import {
     clearPersistedDiagramState,
     loadDiagramState,
@@ -87,11 +99,15 @@ export function initModelPicker() {
 }
 
 export function initLayerDragTargets() {
-    document.querySelectorAll('.layer').forEach(layer => {
-        layer.addEventListener('dragover', handleLayerDragOver);
-        layer.addEventListener('dragleave', handleLayerDragLeave);
-        layer.addEventListener('drop', handleLayerDrop);
-    });
+    document.querySelectorAll('.layer').forEach(bindLayerDragTarget);
+}
+
+function bindLayerDragTarget(layer) {
+    if (!layer || layer.dataset.dragBound === 'true') return;
+    layer.dataset.dragBound = 'true';
+    layer.addEventListener('dragover', handleLayerDragOver);
+    layer.addEventListener('dragleave', handleLayerDragLeave);
+    layer.addEventListener('drop', handleLayerDrop);
 }
 
 export function initCustomEntryInput() {
@@ -172,19 +188,26 @@ export function renderComponentList(category) {
     const list = document.getElementById('component-list');
     const categoryData = categories[category];
 
-    if (!list || !categoryData) return;
+    if (!list) return;
     list.innerHTML = '';
     list.dataset.category = category;
 
-    categoryData.items.forEach(item => {
+    (categoryData?.items || []).forEach(item => {
         const li = createComponentListItem(item, category, false);
         list.appendChild(li);
     });
 
-    customEntries[category].forEach(item => {
+    (customEntries[category] || []).forEach(item => {
         const li = createComponentListItem(item, category, true);
         list.appendChild(li);
     });
+
+    if (!list.children.length && !isBuiltInLayer(category)) {
+        const hint = document.createElement('li');
+        hint.className = 'component-empty-hint';
+        hint.textContent = 'Add custom entries to this lane';
+        list.appendChild(hint);
+    }
 }
 
 export function updateModelPickerState() {
@@ -216,9 +239,12 @@ function createComponentListItem(item, category, isCustom) {
     }
 
     const iconHtml = isCustom ? icons['custom'] : (icons[item.icon] || icons['amplitude']);
+    const iconClass = isBuiltInLayer(category)
+        ? `component-icon category-${category}`
+        : 'component-icon custom-lane-icon';
 
     li.innerHTML = `
-        <div class="component-icon category-${category}">
+        <div class="${iconClass}">
             ${iconHtml}
         </div>
     `;
@@ -226,6 +252,10 @@ function createComponentListItem(item, category, isCustom) {
     nameEl.className = 'component-name';
     nameEl.textContent = item.name;
     li.append(nameEl);
+
+    if (!isBuiltInLayer(category)) {
+        applyLanePaletteToElement(li.querySelector('.component-icon'), getPaletteForCategory(category));
+    }
 
     li.addEventListener('click', () => {
         addItemToLayer(item.id, item.name, isCustom ? 'custom' : item.icon, category);
@@ -248,6 +278,7 @@ export function addCustomEntry() {
         isCustom: true
     };
 
+    if (!customEntries[activeCategory]) customEntries[activeCategory] = [];
     customEntries[activeCategory].push(entry);
     itemCategoryIndex[id] = activeCategory;
     input.value = '';
@@ -769,6 +800,8 @@ export async function initializeApp() {
     initCustomEntryInput();
     initModelPicker();
     initLayerDragTargets();
+    initAddLaneButton();
+    bindAllLayerLabels();
     initExportButton();
     initCopyLinkButton();
     initRefreshButton();
@@ -779,6 +812,7 @@ export async function initializeApp() {
         renderComponentList(activeCategory);
         renderConnections();
         applyDiagramTitleToDom(diagramTitle);
+        applyLayerNamesToDom();
     }
     window.addEventListener('resize', () => renderConnections());
 }
@@ -805,6 +839,9 @@ async function restoreDiagramStateFromStorage() {
         const storedTitle = stored.diagramTitle || DEFAULT_DIAGRAM_TITLE;
         setDiagramTitle(storedTitle);
         applyDiagramTitleToDom(storedTitle);
+        applyStoredCustomLayers(stored.customLayers);
+        applyStoredLayerNames(stored.layerNames);
+        applyLayerNamesToDom();
         setLastEditedAt(stored.lastEditedAt || null);
 
         if (Array.isArray(stored.amplitudeSdkSelectedBadges)) {
@@ -814,13 +851,14 @@ async function restoreDiagramStateFromStorage() {
         let maxCustomId = 0;
         if (stored.customEntries) {
             Object.entries(stored.customEntries).forEach(([category, entries]) => {
+                if (!isBuiltInLayer(category) && !customLayers.some(layer => layer.id === category)) return;
                 if (!customEntries[category]) {
                     customEntries[category] = [];
                 }
                 entries.forEach(entry => {
                     customEntries[category].push({ ...entry });
                     itemCategoryIndex[entry.id] = category;
-                    const match = /custom-[a-z-]+-(\d+)/.exec(entry.id);
+                    const match = /custom-.+-(\d+)$/.exec(entry.id);
                     if (match) {
                         const parsed = Number(match[1]);
                         if (Number.isFinite(parsed)) {
@@ -834,6 +872,7 @@ async function restoreDiagramStateFromStorage() {
 
         if (stored.layerOrder) {
             Object.entries(stored.layerOrder).forEach(([category, slots]) => {
+                if (!isBuiltInLayer(category) && !customLayers.some(layer => layer.id === category)) return;
                 layerOrder[category] = Array.isArray(slots) ? [...slots] : [];
             });
         }
@@ -841,7 +880,10 @@ async function restoreDiagramStateFromStorage() {
         if (stored.activeModel) {
             setActiveModel(stored.activeModel);
         }
-        if (stored.activeCategory) {
+        if (stored.activeCategory && (
+            isBuiltInLayer(stored.activeCategory)
+            || customLayers.some(layer => layer.id === stored.activeCategory)
+        )) {
             setActiveCategory(stored.activeCategory);
         }
 
@@ -901,6 +943,7 @@ function initCopyLinkButton() {
             await persistDiagramState();
             const url = new URL(window.location.href);
             await navigator.clipboard.writeText(url.toString());
+            showToast('Link copied');
         } catch (error) {
             console.error('Failed to copy link', error);
         }
@@ -911,7 +954,7 @@ const TEMPLATE_URLS = {
     'amplitude-to-warehouse': 'https://amplistack.amplitude.com/?state=H4sIAAAAAAAAE61XW2sbOxD-K8s89cCqeDdNmuoh4KYphN4MKRROyIOymuOI6GIkbVoT_N-L1t5drVfZOjl9MfbMN5_mLvkRHtA6YTTQIgdWefGA58zj0tg1UHCmthU6aFVfDEcJVNdS5sAFW1qmvgsvESh8NktRMZnNbXUnPFa-tkizuVpJ4WuOmTfZD2bxztQOIQfJnL_gwiOfe6BQzsoTMitJUXwvj-jxMS2OXxezk3_D0Zwjv_SoHNBHUMzeoxd6CfQaUDEhIQengo8rJjhh3MFNDvhrhVagDt7Ta_iJt074cK4yt0IiYatVsDDBrmJSkgq1RxtM26DpNbDWe-L4fUDWzhtFdghSlAlZEFk1VpSBm2km107skTdSLyrXW7VActSYhewz39TpuoN0QvImMuylx0npCdxsWvmF9lbgKK-PIDjQ1rbTkLeQg2YqVPurabIpquDSDhl-u_PtV-ptjZtRIYbMkY6cvoC7r9SQN67FjnPB1gq1zxaS-f9MU58_8OdpzrLn_CgkZpdqZax_Md2754b9BE8R-fWVhVnNvjSdnl19-HRQMqPWHB4RtWJ3RDzJz3O4YytmL6j4YBD2iIfjsGP-prSo7pjWKLN57Y1qENmri6vFP8_3fThbuyOOLM8WzPp1Nucv76_BhHbc5x8W_4epKJ6d401YzWu03yxHe-jCzZsbofs4dP_2Vn9jE2-JUut4PMFhQw97fmud3MkD4nga4oD_7oreT2i3sc-N1lgFlOvPoZVV5CwV5lbtlCNng4tvp2gLSM76ArUq40aUfTJpVClyFt93NJHCjmiwSqbw6XLTgTgd0h5kFNdO8OQR-yFP-r6f8kPAvapHD2f_CU_KdMC9bFyvcpJt6gEyWcYJ_ji6FP9NeDc6JZxDvtfLXTNyYbHy0X7pykhtLZEspbllksy2eyjOykifrvYAFm2I6KUzyZqCP-VhCpt6_qRDOwjZLOUDsX1KD4KnQH9K5uQCiO-mgeXpYVMed_uUG6HPjPf7TXaTQ9UJ5lobz3aqx03k-RW_v0KJlUf-nvHl9gpy6MI_JWJxJdka2jsuPCshh2UtODriavuA66bPteEYLt3meT3cNhQudSVrji67Nf4ue2_NT4c2Y5pno9ebg83mN5BbGCKoDQAA',
     'warehouse-to-amplitude': 'https://amplistack.amplitude.com/?state=H4sIAAAAAAAAE71XW2sbOxD-K8s8ncLq4LXTnlQPAddNIbQ9NaRQaMiDspo6IroYSZvWBP_3ovV6L155u3FLX4Izl29Gc98neETrhNFAsxRY7sUjLpjHlbEboOBMYXN0sGd9NBwlUF1ImQIXbGWZ-iy8RKDwwaxEzmQyt_m98Jj7wiJNvjCL96ZwmHiTzNVaCl9whBQkc_6SC4987oHCdDJ9RSZTks0-TyY0O6fZ7N_p9OxrMM058iuPygF9AsXsA3qhV0BvABUTElJwKvi4ZoITxh3cpoA_1mgF6uA9vYHveOeED3aVuRMSCVuvg4YJejmTkuSoPdqgun80vQG2d5g4_hAkC-eNIpUEyWYR2jRCCySr-oxpsMc0kxsnDgyWVC9y12jtBcmsVAsZYb7M3U0tUhPJWUuxob6MUl_B7XZPv9TeCuzF-gkEB7rXrTnkP0hBMxUq4H9TRljkwaVKMvzvFruf1NsCt73kdJFbPHJ-AnaTvS5uOxcV5pJtFGqfLCXz30yZn1_gp3HMaYP5TkhMrtTaWH8y3OvnPvsITtby6_IxvHRhpMS8rJmTQWct71gYCsnHsqWS67fvR2WoVe9dE636rk3U8-PZDtdo2eSEMup01wFwt8cq5E9Ki_yeaY0ymRfeqFIi-efyevni-b53G7YyMbM8WTLrN8mcn160nbavsRdvl7-DlGXPjvE27IAN2k-Wox072dNy9dR_xg76Ruuvjvz-lAhboNsCO6-ic3_HijRH-_1_dg0cxrfeCguj9W5yuMYOza0iF7Fn7thOOXLRWbgVY21cT6-JGG1lh1y0FyeNxKkG6oyPIfl4immHHPf7QKQptopfEY6aOHzyoO-HcR0j3LAa6W6_jwlkrHrovgcjz44YHzpkmjAdbyTahH9QrIaKpaunNxjCIYvH05LNRpXKYDyGktFy4Tbc3E4J55Af9GOdHC4s5r41Mut0UVtIJCtp7pgkk91obbve48eLuSPWmnKti3AQNSZ-zMOYbOxMjD9tlGS5Z0bKNiEdJR4T-lUwR7ZllnU0z8drnvUUT5ysg403NErbbTY2GMdaqKOyaxDj_WF33KaQ14S51sazivW0bVm55g_XGM5j5G8YX-3OAYcufB4Ti2vJNrC_N8J3A6SwKgRHR1xhH3FTfndqwzEcQOX3U3cLULjSuSw4uuTO-PvkjTXfHdqEaZ70Lmn3Dbbbn-QvXfieDwAA',
     'cdp-in-the-middle': 'https://amplistack.amplitude.com/?state=H4sIAAAAAAAAE7VY227bOBD9FYFPW0BcWJGbpnoI4DpZINjt1kAKLLCFHxhx6hDhRSCpdI3A_15QliXSom3Zxb4Y9nDmcHjmRvoNvYI2TElUZCkipWWvMCcWVkqvUYGIJHxtmEG7tc-KAkeFrDlPEWVkpYn4yiwHVKC_1IqVhCczXT4zC6WtNRTJ_G6RzEFaTXiyYBVwJgGliBNj7ymzQGcWFehqcnWNJ1c4y79OsiK7LiY3v-cfP_zrNqYU6IMFYVDxhgTRL2CZXKHiGwJBGEcpMsJ5WBFGMaEGLVME_1WgGcgSjFP8AU-GWbevUE-MAyZV5SyUsysJ57gEaUE7U6Nq3ZoRUXFmawrY0BenWRurBG41cJZHZNOIzIm0cOAdoQF6I7WsNL3tThHnjZkjn9gmTt86lU6IvU096Xu03Ozk99JqBgMK3xCjqNjZdiv4A0qRJMKF9W_VEMdKt3mr6X6b-fZrYXUNmwHnIbK3hm8uwO6DEuL6FLeYC7IWIG2y4MR-V1qcxk_jmFc95h-MQ_IgKqXtxXAfzz32AZzM8-v-1Z10rjiHssmOi0FzzzviKj353FRK8nj35-Wo0x51frcYFWmvQkJQryI60H-IhmdVm_PZ7NCyyQXpGNTjHnBYlS3yFyFZ-UykBJ7MaqtEo5H8dv-4eHe-736Jd1vkmiYLou06mdHLk9_Dvj4zeIeRsuxsjjduRKxBf9EU9NjGnzZzqfsYOwd6q_9rImzBf2EseC5GysE_cZCaocXpebFPYDc-5krKbYsx_QQqjDD4Npio7UKlDL6NHXe77PGLb8smS9uVgN849p5KH9J2vRXg23isin23OkeDBrM7SJtax_aJOdnLhjzkh33J42iDjOp9DlvBOfrTEZREbjXFgK2j2seImEbIPL2xf6qRZA1iF6mxg_myl2_Hbm2xeB7Vj_pxRr5M98qn1CJG4dLd1Y1gxgDdq-QuwSnTUFqvm3a0FbrmgFdcPRGOJ9uu61M_WI9XYKDWNwP_0nkUNaZ-yMOYbuwmGj_aKM1mBI3U7SkdpR5TOkXmsUwKJnFgeTPecjowHNMHj_VzvzWMPdyhEgxM8vHD4NQwGdmgT7X7kRxfXxqc94eCM2bYue6grN1vDcsUlZ1gJqWypF1623iOPdKXR3DPD6CfCF1tr0kGjPtTAWuoOFmj3T3MvctQilY1o2CwqfUrrJv_FrrOuEyRVBTcJbF5q4ZhK9CDLHlNwSRPyj4nn7T6YUAnRNJk8Gox39Fm8xOteKPQ4BAAAA',
-    'activation': 'https://amplistack.amplitude.com/?state=H4sIAAAAAAAAE61XWW_jNhD-K8I8tYBYWHKcbvkQwOtNgaDdroEsUKBBHhhx1iHCwyCpbI3A_31BWbIoS3Zkty-GPMc3B-cg3-AVrRNGA81SYIUXr7hgHlfGboCCM6Ut0EHD-mw4SqC6lDIFLtjKMvVVeIlA4U-zEgWTydwWz8Jj4UuLNJmrtRS-5Jgwl8wDCPPBXAqSOX_LhUc-90Ahn-TXZJKTbPp1ktE8o7PZL9lV_k-wzTnyO4_KAX0DxewLeqFXQB8AFRMSUnAqOLlmghPGHTymgP-u0QrUwX36AN_xyQmPkIIyT0IiYet10DBBr2BSkgK1RxtUm6jpA7DGfeL4S5AsnTeK1BIkmw7Q-qQ8kKwK2EwzuXHiALyielFUnrM2S_ShgWqJ5Ko1EFFn8Lht6LfaW4G9bL2B4EAb3T2H_AopaKbCIf5lqhyJIhivJcN_t9h9Um9L3PbS20WOeOTDBdht_ru4cYZrzCXbKNQ-WUrmvxmr3sdPhzHzFvN3ITG5U2tj_cVwv50b9hGcLPLr9jVEujBSYlH30IWg08g7Fvo6-Vw1RXL_6Y_LUa9a1MWn5aiTjrqhC9owSOTq38zisynd-dnco2WTC8qx048HwN2urJG_KC2KZ6Y1ymReeqMqieSn2_vlz-f7Hrf43sTU8mTJrN8kc3558UfY12ce3nGkLDs7x9uwDTZov1iOduyMT6sttP8ZO_Jbrf9j-O-ALt0AkS9Du6AfYacUO7a7lXiMNYsw23WxMFrvRoprNw51ypGbzrKsGWvjyM3RkGmUT3JTVFVZczr5HMY-EGmPsObXBHIzfDa0qY5TqkN2W1o_tGkU2yHrvSj2h3nU44OIB-vghPmT8oN-nBHee-5Y1YPLj6Ll_8HZwdvPWI1Zq1GNkrY2HsMl1inhHPKDJtgXEhcWCx8Nnr06taVEspLmiUky2Q2ouB56_OHi7YhFoyO6n51EHRI_5uGQ7NClbTi0UZJ1ikfJtikdJT4k9F4yR9ZIlnU0P4zXvOopjpk3p0ZhPIvGBndsdnRUpuOjur40HbOeYrfnDg41dKDx_rD9HlMo9oS51sazmvW2jVy55y_3GG7DyD8yvtptbYcuPGiJxbVkG2iuBeGZACmsSsHREVfaV9xUD9v46aUNx3BnqZ5O3YFN4U4XsuTokifjn5OP1nx3aBOmedK7RLtvsN3-AIAt7oxcDwAA' 
+    'activation': 'https://amplistack.amplitude.com/?state=H4sIAAAAAAAAE61XWW_jNhD-K8I8tYBYWHKcbvkQwOtNgaDdroEsUKBBHhhx1iHCwyCpbI3A_31BWbIoS3Zkty-GPMc3B-cg3-AVrRNGA81SYIUXr7hgHlfGboCCM6Ut0EHD-mw4SqC6lDIFLtjKMvVVeIlA4U-zEgWTydwWz8Jj4UuLNJmrtRS-5Jgwl8wDCPPBXAqSOX_LhUc-90Ahn-TXZJKTbPp1ktE8o7PZL9lV_k-wzTnyO4_KAX0DxewLeqFXQB8AFRMSUnAqOLlmghPGHTymgP-u0QrUwX36AN_xyQmPkIIyT0IiYet10DBBr2BSkgK1RxtUm6jpA7DGfeL4S5AsnTeK1BIkmw7Q-qQ8kKwK2EwzuXHiALyielFUnrM2S_ShgWqJ5Ko1EFFn8Lht6LfaW4G9bL2B4EAb3T2H_AopaKbCIf5lqhyJIhivJcN_t9h9Um9L3PbS20WOeOTDBdht_ru4cYZrzCXbKNQ-WUrmvxmr3sdPhzHzFvN3ITG5U2tj_cVwv50b9hGcLPLr9jVEujBSYlH30IWg08g7Fvo6-Vw1RXL_6Y_LUa9a1MWn5aiTjrqhC9owSOTq38zisynd-dnco2WTC8qx048HwN2urJG_KC2KZ6Y1ymReeqMqieSn2_vlz-f7Hrf43sTU8mTJrN8kc3558UfY12ce3nGkLDs7x9uwDTZov1iOduyMT6sttP8ZO_Jbrf9j-O-ALt0AkS9Du6AfYacUO7a7lXiMNYsw23WxMFrvRoprNw51ypGbzrKsGWvjyM3RkGmUT3JTVFVZczr5HMY-EGmPsObXBHIzfDa0qY5TqkN2W1o_tGkU2yHrvSj2h3nU44OIB-vghPmT8oN-nBHee-5Y1YPLj6Ll_8HZwdvPWI1Zq1GNkrY2HsMl1inhHPKDJtgXEhcWCx8Nnr06taVEspLmiUky2Q2ouB56_OHi7YhFoyO6n51EHRI_5uGQ7NClbTi0UZJ1ikfJtikdJT4k9F4yR9ZIlnU0P4zXvOopjpk3p0ZhPIvGBndsdnRUpuOjur40HbOeYrfnDg41dKDx_rD9HlMo9oS51sazmvW2jVy55y_3GG7DyD8yvtptbYcuPGiJxbVkG2iuBeGZACmsSsHREVfaV9xUD9v46aUNx3BnqZ5O3YFN4U4XsuTokifjn5OP1nx3aBOmedK7RLtvsN3-AIAt7oxcDwAA'
 };
 
 function initTemplateButtons() {
@@ -920,6 +963,7 @@ function initTemplateButtons() {
             const template = btn.dataset.template;
             const url = TEMPLATE_URLS[template];
             if (url) {
+                trackOpenedTemplate(btn.textContent.trim());
                 window.location.href = url;
             }
         });
@@ -951,11 +995,15 @@ export function clearDiagram() {
     });
     resetCustomEntryCounter(0);
     clearCustomItemIndex();
+    resetCustomLayersDom();
+    resetCustomLayers();
     setActiveModel(null);
     setActiveCategory('marketing');
     setDiagramTitle(DEFAULT_DIAGRAM_TITLE);
     setLastEditedAt(null);
     applyDiagramTitleToDom(DEFAULT_DIAGRAM_TITLE);
+    resetLayerNames();
+    applyLayerNamesToDom();
     updateCategoryTabState();
     updateModelPickerState();
     renderComponentList(activeCategory);
@@ -973,4 +1021,230 @@ export function applyDiagramTitleToDom(title, options = {}) {
     const el = document.getElementById('diagram-title');
     if (!el) return;
     el.textContent = normalizedTitle;
+}
+
+export function applyLayerNamesToDom() {
+    if (typeof document === 'undefined') return;
+    document.querySelectorAll('.layer[data-layer]').forEach(layer => {
+        const category = layer.dataset.layer;
+        const label = layer.querySelector('.layer-label');
+        if (!label || document.activeElement === label) return;
+        const name = layerNames[category] || category;
+        label.textContent = name;
+        label.setAttribute('aria-label', `${name} lane name`);
+        const tab = document.querySelector(`.category-tab[data-category="${category}"]`);
+        if (tab) tab.title = name;
+    });
+}
+
+function getPaletteForCategory(category) {
+    const custom = customLayers.find(layer => layer.id === category);
+    return getCustomLanePalette(custom?.paletteIndex || 0);
+}
+
+function applyLanePaletteToElement(element, palette) {
+    if (!element || !palette) return;
+    element.style.setProperty('--lane-bg', palette.bg);
+    element.style.setProperty('--lane-border', palette.border);
+    element.style.setProperty('--lane-accent', palette.accent);
+}
+
+function initAddLaneButton() {
+    const button = document.getElementById('add-lane-btn');
+    if (!button) return;
+    button.addEventListener('click', () => {
+        addCustomLane();
+    });
+}
+
+export function addCustomLane(options = {}) {
+    const { focusLabel = true, persist = true } = options;
+    const layer = registerCustomLayer({
+        id: options.id,
+        name: options.name,
+        paletteIndex: options.paletteIndex
+    });
+    if (!layer) return null;
+    const layerEl = renderCustomLane(layer);
+    renderCustomCategoryTab(layer);
+    if (focusLabel) {
+        switchCategory(layer.id);
+        const label = layerEl?.querySelector('.layer-label');
+        if (label) {
+            label.focus();
+            const selection = window.getSelection?.();
+            const range = document.createRange?.();
+            if (selection && range) {
+                range.selectNodeContents(label);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        }
+    }
+    touchLastEdited();
+    renderConnections();
+    if (persist) void persistDiagramState();
+    return layer;
+}
+
+function renderCustomLane(layer) {
+    const canvas = document.querySelector('.canvas');
+    if (!canvas) return null;
+    const existing = canvas.querySelector(`.layer[data-layer="${layer.id}"]`);
+    if (existing) return existing;
+
+    const layerEl = document.createElement('div');
+    layerEl.className = 'layer layer-custom';
+    layerEl.dataset.layer = layer.id;
+    applyLanePaletteToElement(layerEl, getCustomLanePalette(layer.paletteIndex));
+    layerEl.innerHTML = `
+        <div class="layer-label" contenteditable="true" role="textbox" spellcheck="false"></div>
+        <button type="button" class="layer-remove" title="Remove lane" aria-label="Remove lane">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </button>
+        <div class="layer-content"></div>
+    `;
+    const label = layerEl.querySelector('.layer-label');
+    label.textContent = layer.name;
+    label.setAttribute('aria-label', `${layer.name} lane name`);
+    const addBtn = document.getElementById('add-lane-btn');
+    if (addBtn) {
+        canvas.insertBefore(layerEl, addBtn);
+    } else {
+        canvas.appendChild(layerEl);
+    }
+    bindLayerDragTarget(layerEl);
+    bindLayerLabel(layerEl.querySelector('.layer-label'));
+    layerEl.querySelector('.layer-remove')?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeCustomLane(layer.id);
+    });
+    return layerEl;
+}
+
+function renderCustomCategoryTab(layer) {
+    const picker = document.querySelector('.category-picker');
+    if (!picker) return null;
+    const existing = picker.querySelector(`.category-tab[data-category="${layer.id}"]`);
+    if (existing) {
+        existing.title = layer.name;
+        applyLanePaletteToElement(existing, getCustomLanePalette(layer.paletteIndex));
+        return existing;
+    }
+    const tab = document.createElement('button');
+    tab.className = 'category-tab custom-lane-tab';
+    tab.dataset.category = layer.id;
+    tab.title = layer.name;
+    tab.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M3 9h18"/>
+            <path d="M3 15h18"/>
+        </svg>
+    `;
+    applyLanePaletteToElement(tab, getCustomLanePalette(layer.paletteIndex));
+    tab.addEventListener('click', () => switchCategory(layer.id));
+    picker.appendChild(tab);
+    return tab;
+}
+
+function removeCustomLane(category) {
+    if (isBuiltInLayer(category)) return;
+    const layerEl = document.querySelector(`.layer[data-layer="${category}"]`);
+    layerEl?.querySelectorAll('.diagram-node').forEach(node => {
+        const itemId = node.dataset.id;
+        node.remove();
+        addedItems[category]?.delete(itemId);
+        delete nodeNotes[itemId];
+        removeRelatedCustomConnections(itemId);
+    });
+    layerEl?.remove();
+    document.querySelector(`.category-tab[data-category="${category}"]`)?.remove();
+    unregisterCustomLayer(category);
+    if (activeCategory === category) {
+        switchCategory('marketing');
+    }
+    touchLastEdited();
+    renderConnections();
+    void persistDiagramState();
+}
+
+function resetCustomLayersDom() {
+    document.querySelectorAll('.layer.layer-custom').forEach(layer => layer.remove());
+    document.querySelectorAll('.category-tab.custom-lane-tab').forEach(tab => tab.remove());
+}
+
+function applyStoredCustomLayers(storedLayers) {
+    resetCustomLayersDom();
+    resetCustomLayers();
+    if (!Array.isArray(storedLayers)) return;
+    storedLayers.forEach(layer => {
+        if (!layer?.id) return;
+        const registered = registerCustomLayer({
+            id: layer.id,
+            name: layer.name || DEFAULT_CUSTOM_LANE_NAME,
+            paletteIndex: layer.paletteIndex
+        });
+        renderCustomLane(registered);
+        renderCustomCategoryTab(registered);
+    });
+}
+
+function bindAllLayerLabels() {
+    document.querySelectorAll('.layer-label').forEach(bindLayerLabel);
+}
+
+export function bindLayerLabel(label) {
+    if (!label || label.dataset.labelBound === 'true') return;
+    label.dataset.labelBound = 'true';
+    label.addEventListener('input', (event) => handleLayerNameChange(label, event));
+    label.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            label.blur();
+        }
+    });
+    label.addEventListener('blur', (event) => handleLayerNameChange(label, event));
+    label.addEventListener('mousedown', (event) => event.stopPropagation());
+    label.addEventListener('dragstart', (event) => event.preventDefault());
+}
+
+function handleLayerNameChange(label, event) {
+    const category = label.closest('.layer')?.dataset?.layer;
+    if (!category) return;
+    const trimmed = (label.textContent || '').trim();
+    setLayerName(category, trimmed);
+    if (!trimmed && event?.type === 'blur') {
+        label.textContent = layerNames[category];
+    }
+    const name = layerNames[category] || DEFAULT_CUSTOM_LANE_NAME;
+    label.setAttribute('aria-label', `${name} lane name`);
+    const tab = document.querySelector(`.category-tab[data-category="${category}"]`);
+    if (tab) tab.title = name;
+    touchLastEdited();
+    void persistDiagramState();
+}
+
+function touchLastEdited() {
+    const now = new Date().toISOString();
+    setLastEditedAt(now);
+    try {
+        localStorage.setItem('amplistack:lastEditedAt', now);
+    } catch {
+        // Ignore storage failures
+    }
+    const lastEditedEl = document.getElementById('diagram-last-edited');
+    if (!lastEditedEl) return;
+    const date = new Date(now);
+    lastEditedEl.textContent = `Last edited: ${date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    })}`;
 }
